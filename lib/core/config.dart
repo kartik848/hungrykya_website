@@ -29,8 +29,10 @@ class AppConfig {
 
   static String normalizeLoginId(String id) {
     final v = id.trim().toLowerCase();
+    if (v == 'admin' || v == 'admin@123' || v == 'admin@123.hungrykya.app') return adminEmail;
     final at = v.indexOf('@');
     if (at > 0 && !v.substring(at + 1).contains('.')) return '$v$loginDomainSuffix';
+    if (!v.contains('@')) return '$v$loginDomainSuffix';
     return v;
   }
 

@@ -11,6 +11,7 @@ import '../../services/auth_service.dart';
 import '../../services/db.dart';
 import '../../services/location.dart';
 import '../../services/store_data.dart';
+import '../../services/sound_service.dart';
 import '../../widgets/common.dart';
 import '../panel/orders_manager.dart';
 import '../panel/panel_widgets.dart';
@@ -62,11 +63,96 @@ class AdminDashboard extends StatelessWidget {
         title: 'Dashboard',
         subtitle: DateFormat('EEEE, d MMMM yyyy').format(now),
         actions: [
+          IconButton(
+            tooltip: 'Test Order Chime',
+            icon: const Icon(Icons.notifications_active_outlined, size: 20),
+            onPressed: () {
+              SoundService.playOrderAlert();
+              showToast(context, '🔔 Order alert chime played');
+            },
+          ),
           OutlinedButton.icon(
-              onPressed: () => launchUrl(Uri.base.replace(path: '/')),
-              icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              label: const Text('Open store')),
+            onPressed: () async {
+              if (await confirmDialog(
+                context,
+                title: 'Load Full Demo Store?',
+                message: 'This populates categories with photos, popular dishes, banners, offers and default store settings.',
+                confirm: 'Load Demo Store',
+              )) {
+                try {
+                  await Db.seedFullStore();
+                  if (context.mounted) showToast(context, '✨ Complete demo store loaded successfully!');
+                } catch (e) {
+                  if (context.mounted) showToast(context, authErrorText(e), error: true);
+                }
+              }
+            },
+            icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+            label: const Text('Load Demo Store'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => showProductEditor(context, isAdmin: true),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add Dish'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(Uri.base.replace(path: '/')),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: const Text('Open store'),
+          ),
         ],
+      ),
+      Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: PK.line),
+        ),
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text('Quick Shortcuts:', style: AppTheme.body(13, color: PK.muted, weight: FontWeight.w700)),
+            ActionChip(
+              avatar: const Icon(Icons.restaurant_menu_rounded, size: 16, color: PK.flame),
+              label: const Text('Menu'),
+              onPressed: () => onGo(3),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.category_rounded, size: 16, color: PK.blue),
+              label: const Text('Categories'),
+              onPressed: () => onGo(2),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.receipt_long_rounded, size: 16, color: PK.green),
+              label: Text('Orders (${orders.length})'),
+              onPressed: () => onGo(1),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.local_offer_rounded, size: 16, color: PK.violet),
+              label: const Text('Coupons & Sales'),
+              onPressed: () => onGo(6),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.view_carousel_rounded, size: 16, color: PK.amber),
+              label: const Text('Banners'),
+              onPressed: () => onGo(4),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.storefront_rounded, size: 16, color: PK.ink),
+              label: Text('Vendors (${vendors.length})'),
+              onPressed: () => onGo(7),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.account_balance_wallet_rounded, size: 16, color: PK.green),
+              label: const Text('Payouts'),
+              onPressed: () => onGo(8),
+            ),
+          ],
+        ),
       ),
       ResponsiveGrid(minItemWidth: 230, children: [
         StatCard(
@@ -208,21 +294,54 @@ class AdminDashboard extends StatelessWidget {
         child: orders.isEmpty
             ? Text('Orders will show up here as soon as customers start ordering.', style: AppTheme.body(14, color: PK.muted))
             : Column(children: [
-                for (final o in orders.take(6))
+                for (final o in orders.take(6)) ...[
                   ListTile(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
                     onTap: () => showOrderDetail(context, o.id, isAdmin: true),
                     leading: CircleAvatar(
                       backgroundColor: OrderStatus.color(o.status).withOpacity(.12),
                       child: Icon(OrderStatus.icon(o.status), color: OrderStatus.color(o.status), size: 20),
                     ),
-                    title: Text('#${o.orderNo} · ${o.customerName}', style: AppTheme.body(14, color: PK.ink, weight: FontWeight.w700)),
-                    subtitle: Text('${o.vendorName} · ${timeAgo(o.createdAt)}', style: AppTheme.body(12.5, color: PK.muted)),
-                    trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text(rupees(o.total), style: AppTheme.body(14, color: PK.ink, weight: FontWeight.w800)),
-                      Text(OrderStatus.label(o.status), style: AppTheme.body(11.5, color: OrderStatus.color(o.status), weight: FontWeight.w700)),
-                    ]),
+                    title: Row(
+                      children: [
+                        Text('#${o.orderNo} · ${o.customerName}', style: AppTheme.body(14, color: PK.ink, weight: FontWeight.w700)),
+                        const SizedBox(width: 8),
+                        if (o.status == OrderStatus.placed) const Pill('NEW', color: PK.flame, solid: true),
+                        if (o.paymentStatus == PayStatus.verification)
+                          const Pill('Verify UPI', color: PK.blue, solid: true),
+                      ],
+                    ),
+                    subtitle: Text(
+                      '${o.items.map((i) => '${i.qty}× ${i.name}').join(', ')} · ${o.vendorName} · ${timeAgo(o.createdAt)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.body(12.5, color: PK.muted),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Text(rupees(o.total), style: AppTheme.body(14, color: PK.ink, weight: FontWeight.w800)),
+                          Text(OrderStatus.label(o.status), style: AppTheme.body(11.5, color: OrderStatus.color(o.status), weight: FontWeight.w700)),
+                        ]),
+                        if (o.status == OrderStatus.placed && (!o.isVendorOrder)) ...[
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: PK.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                            onPressed: () => advanceOrder(context, o, OrderStatus.confirmed),
+                            child: const Text('Accept'),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
+                  const Divider(height: 1),
+                ],
               ]),
       ),
     ]);

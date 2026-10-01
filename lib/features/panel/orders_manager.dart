@@ -10,6 +10,8 @@ import '../../services/db.dart';
 import '../../widgets/common.dart';
 import 'panel_widgets.dart';
 
+import 'package:web/web.dart' as web;
+
 String nextActionLabel(String status) => const {
       OrderStatus.placed: 'Accept order',
       OrderStatus.confirmed: 'Start preparing',
@@ -17,6 +19,148 @@ String nextActionLabel(String status) => const {
       OrderStatus.outForDelivery: 'Mark delivered',
     }[status] ??
     '';
+
+void showPrintReceiptDialog(BuildContext context, OrderModel o) {
+  showDialog(
+    context: context,
+    builder: (d) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('KOT / Invoice Receipt', style: AppTheme.body(16, color: PK.ink, weight: FontWeight.w800)),
+                  IconButton(onPressed: () => Navigator.pop(d), icon: const Icon(Icons.close_rounded, size: 20)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.black26),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Text(
+                        'HungryKya Kitchen',
+                        style: AppTheme.body(18, color: Colors.black, weight: FontWeight.w900),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Center(
+                      child: Text(
+                        'KITCHEN ORDER TICKET (KOT)',
+                        style: AppTheme.body(11, color: Colors.black54, weight: FontWeight.w800).copyWith(letterSpacing: 1.5),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Divider(color: Colors.black26, thickness: 1),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Order #: ${o.orderNo}', style: AppTheme.body(13, color: Colors.black, weight: FontWeight.w800)),
+                        Text(fmtTime(o.createdAt), style: AppTheme.body(12, color: Colors.black87)),
+                      ],
+                    ),
+                    Text('Date: ${fmtDate(o.createdAt)}', style: AppTheme.body(12, color: Colors.black87)),
+                    Text('Kitchen: ${o.vendorName}', style: AppTheme.body(12, color: Colors.black87)),
+                    const SizedBox(height: 8),
+                    Text('Customer: ${o.customerName}', style: AppTheme.body(13, color: Colors.black, weight: FontWeight.w700)),
+                    Text('Phone: +91 ${o.phone}', style: AppTheme.body(12, color: Colors.black87)),
+                    Text('Address: ${o.address}${o.landmark.isEmpty ? '' : ', ${o.landmark}'}', style: AppTheme.body(11.5, color: Colors.black87)),
+                    if (o.note.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('Note: ${o.note}', style: AppTheme.body(12, color: Colors.black, weight: FontWeight.w800)),
+                    ],
+                    const SizedBox(height: 10),
+                    const Divider(color: Colors.black26, thickness: 1),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text('ITEM', style: AppTheme.body(11.5, color: Colors.black54, weight: FontWeight.w800))),
+                        SizedBox(width: 40, child: Text('QTY', textAlign: TextAlign.center, style: AppTheme.body(11.5, color: Colors.black54, weight: FontWeight.w800))),
+                        Text('AMT', style: AppTheme.body(11.5, color: Colors.black54, weight: FontWeight.w800)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    for (final i in o.items)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Expanded(child: Text(i.name, style: AppTheme.body(13, color: Colors.black, weight: FontWeight.w600))),
+                            SizedBox(width: 40, child: Text('${i.qty}', textAlign: TextAlign.center, style: AppTheme.body(13, color: Colors.black, weight: FontWeight.w800))),
+                            Text(rupees(i.total), style: AppTheme.body(13, color: Colors.black, weight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    const Divider(color: Colors.black26, thickness: 1),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text('Subtotal', style: AppTheme.body(12, color: Colors.black87)),
+                      Text(rupees(o.subtotal), style: AppTheme.body(12, color: Colors.black87)),
+                    ]),
+                    if (o.couponDiscount > 0)
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Text('Discount (${o.couponCode})', style: AppTheme.body(12, color: Colors.black87)),
+                        Text('- ${rupees(o.couponDiscount)}', style: AppTheme.body(12, color: Colors.black87)),
+                      ]),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text('Delivery', style: AppTheme.body(12, color: Colors.black87)),
+                      Text(rupees(o.deliveryFee), style: AppTheme.body(12, color: Colors.black87)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text('GRAND TOTAL', style: AppTheme.body(14, color: Colors.black, weight: FontWeight.w900)),
+                      Text(rupees(o.total), style: AppTheme.body(15, color: Colors.black, weight: FontWeight.w900)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: Text(
+                        'Payment: ${o.isUpi ? 'PREPAID UPI' : 'CASH ON DELIVERY'} (${PayStatus.label(o.paymentStatus).toUpperCase()})',
+                        style: AppTheme.body(11.5, color: Colors.black87, weight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Divider(color: Colors.black26, thickness: 1),
+                    Center(
+                      child: Text('Thank you for ordering with HungryKya!', style: AppTheme.body(11, color: Colors.black54)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: PK.ink,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  try {
+                    web.window.print();
+                  } catch (_) {}
+                },
+                icon: const Icon(Icons.print_rounded, size: 18),
+                label: const Text('Print Receipt / KOT'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
 
 Future<void> advanceOrder(BuildContext context, OrderModel o, String status) async {
   try {
@@ -249,6 +393,12 @@ class _OrderDetail extends StatelessWidget {
             ]),
           ),
           Pill(OrderStatus.label(o.status), color: OrderStatus.color(o.status)),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Print KOT / Bill Receipt',
+            onPressed: () => showPrintReceiptDialog(context, o),
+            icon: const Icon(Icons.print_rounded, size: 20),
+          ),
           IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
         ]),
       ),

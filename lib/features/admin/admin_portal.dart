@@ -10,6 +10,7 @@ import '../../core/config.dart';
 import '../../models/models.dart';
 import '../../services/auth_service.dart';
 import '../../services/db.dart';
+import '../../services/sound_service.dart';
 import '../../widgets/common.dart';
 import '../panel/orders_manager.dart';
 import '../panel/panel_widgets.dart';
@@ -55,9 +56,16 @@ class _NotAdmin extends StatelessWidget {
     return PanelMessage(
       emoji: '🔒',
       title: 'Admin access required',
-      body: '$email is not an admin yet.\n\nTo make this account an admin, open Firebase Console → Firestore → '
-          'create collection "admins" → add a document whose ID is:\n\n$uid\n\n(any field, e.g. email). Then tap "Check again".',
+      body: '$email is not an admin account.\n\n'
+          'To access the Admin Console, please log in with your Admin ID (admin@123), '
+          'or authorize this UID in Firebase Console under the "admins" collection:\n\n$uid',
       actions: [
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: PK.amber, foregroundColor: Colors.black),
+          onPressed: auth.signOut,
+          icon: const Icon(Icons.login_rounded, size: 18),
+          label: const Text('Log in with Admin Account'),
+        ),
         OutlinedButton.icon(
           onPressed: () {
             Clipboard.setData(ClipboardData(text: uid));
@@ -66,7 +74,7 @@ class _NotAdmin extends StatelessWidget {
           icon: const Icon(Icons.copy_rounded, size: 18),
           label: const Text('Copy UID'),
         ),
-        ElevatedButton(onPressed: auth.refreshAdmin, child: const Text('Check again')),
+        TextButton(onPressed: auth.refreshAdmin, child: const Text('Check again')),
         TextButton(onPressed: auth.signOut, child: const Text('Log out')),
       ],
     );
@@ -95,7 +103,7 @@ class _AdminHomeState extends State<_AdminHome> {
       final newCount = o.where((e) => e.status == OrderStatus.placed).length;
       if (_lastNewCount >= 0 && newCount > _lastNewCount && mounted) {
         showToast(context, '🔔 New order received!');
-        SystemSound.play(SystemSoundType.alert);
+        SoundService.playOrderAlert();
       }
       _lastNewCount = newCount;
       setState(() => _orders = o);

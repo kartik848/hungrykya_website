@@ -121,9 +121,14 @@ class _AuthFormState extends State<AuthForm> {
             autofillHints: const [AutofillHints.email],
             decoration: InputDecoration(labelText: _signup ? 'Email' : widget.emailLabel, prefixIcon: const Icon(Icons.mail_outline_rounded)),
             // Login also accepts short ids like admin@123 (see AppConfig.normalizeLoginId).
-            validator: (v) => RegExp(_signup ? r'^[^@\s]+@[^@\s]+\.[^@\s]+$' : r'^[^@\s]+@[^@\s]+$').hasMatch((v ?? '').trim())
-                ? null
-                : 'Enter a valid email',
+            validator: (v) {
+              final s = (v ?? '').trim();
+              if (s.isEmpty) return 'Enter your email or Admin ID';
+              if (!_signup && (s.toLowerCase() == 'admin' || s.toLowerCase() == 'admin@123')) return null;
+              return RegExp(_signup ? r'^[^@\s]+@[^@\s]+\.[^@\s]+$' : r'^[^@\s]+(@[^@\s]+)?$').hasMatch(s)
+                  ? null
+                  : 'Enter a valid email or ID';
+            },
           ),
           const SizedBox(height: 14),
           TextFormField(
@@ -148,6 +153,50 @@ class _AuthFormState extends State<AuthForm> {
             )
           else
             const SizedBox(height: 18),
+          if (!_signup && widget.emailLabel.toLowerCase().contains('admin')) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E7),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFFD56B)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.vpn_key_rounded, size: 20, color: Color(0xFFB86E00)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Admin Credentials', style: AppTheme.body(12.5, color: const Color(0xFF5E3F00), weight: FontWeight.w800)),
+                        Text('admin@123  ·  Pass: 123456', style: AppTheme.body(11.5, color: const Color(0xFF8A5B00))),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFB321),
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                    ),
+                    onPressed: _busy
+                        ? null
+                        : () {
+                            _email.text = 'admin@123';
+                            _pw.text = '123456';
+                            _submit();
+                          },
+                    icon: const Icon(Icons.bolt_rounded, size: 16),
+                    label: const Text('1-Click Login'),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_error != null)
             Container(
               margin: const EdgeInsets.only(bottom: 14),

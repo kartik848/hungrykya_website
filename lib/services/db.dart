@@ -261,51 +261,148 @@ class Db {
 
   // ---------- Demo data ----------
 
-  /// Seeds a starter menu so a fresh store isn't empty. Admin-only.
-  static Future<void> seedSampleMenu() async {
+  /// Seeds a complete store (categories with photos, full menu, banners, coupons, settings). Admin-only.
+  static Future<void> seedFullStore() async {
     final batch = _fs.batch();
-    const items = [
-      ('Paneer Butter Masala', 'Soft paneer cubes simmered in a silky tomato-butter gravy.', 'Mains', 229.0, true, true),
-      ('Chicken Dum Biryani', 'Slow-cooked basmati, tender chicken, saffron & fried onions. Served with raita.', 'Biryani', 279.0, false, true),
-      ('Veg Dum Biryani', 'Fragrant basmati layered with garden vegetables and whole spices.', 'Biryani', 219.0, true, false),
-      ('Dal Makhani', 'Black lentils slow-cooked overnight with butter and cream.', 'Mains', 189.0, true, false),
-      ('Butter Chicken', 'Smoky tandoori chicken in a rich makhani gravy.', 'Mains', 299.0, false, true),
-      ('Classic Veg Thali', 'Dal, sabzi, paneer, rice, 3 rotis, salad & sweet.', 'Thali', 249.0, true, true),
-      ('Chicken Kathi Roll', 'Flaky paratha wrapped around spiced chicken tikka and onions.', 'Rolls', 159.0, false, false),
-      ('Paneer Tikka Roll', 'Char-grilled paneer tikka with mint mayo in a paratha.', 'Rolls', 149.0, true, false),
-      ('Butter Naan', 'Soft tandoor-baked naan brushed with butter.', 'Breads', 45.0, true, false),
-      ('Gulab Jamun (2 pc)', 'Warm, syrup-soaked khoya dumplings.', 'Desserts', 69.0, true, false),
-      ('Masala Chaas', 'Chilled spiced buttermilk.', 'Beverages', 49.0, true, false),
+
+    // 1. Categories with photos
+    final catData = [
+      ('Biryani', 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&h=600&q=75&fit=crop&auto=format', 1),
+      ('Mains', 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=800&h=600&q=75&fit=crop&auto=format', 2),
+      ('Combos', 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&h=600&q=75&fit=crop&auto=format', 3),
+      ('Starters', 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=800&h=600&q=75&fit=crop&auto=format', 4),
+      ('Street Food', 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=800&h=600&q=75&fit=crop&auto=format', 5),
+      ('Pizza', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&q=75&fit=crop&auto=format', 6),
+      ('Fast Food', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=600&q=75&fit=crop&auto=format', 7),
+      ('Healthy', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=600&q=75&fit=crop&auto=format', 8),
+      ('Desserts', 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=800&h=600&q=75&fit=crop&auto=format', 9),
     ];
-    var i = 0;
-    for (final (name, desc, cat, price, veg, best) in items) {
-      batch.set(products.doc(), {
+    for (final (name, img, order) in catData) {
+      batch.set(categories.doc('demo-${name.toLowerCase().replaceAll(' ', '-')}'), {
+        'name': name,
+        'imageUrl': img,
+        'active': true,
+        'sortOrder': order,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    // 2. Menu items
+    final prods = [
+      ('Chicken Dum Biryani', 'Slow-cooked basmati, tender chicken, saffron & fried onions. Served with raita.', 'Biryani', 279.0, 20, false, true, 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Veg Handi Biryani', 'Fragrant basmati layered with garden vegetables and whole spices, sealed in a handi.', 'Biryani', 219.0, 15, true, false, 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Paneer Butter Masala', 'Soft paneer cubes in a silky tomato-butter gravy. Best with butter naan.', 'Mains', 229.0, 0, true, true, 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Home-style Chicken Curry', 'Bone-in chicken simmered with onions, tomatoes and ghar ka masala.', 'Mains', 259.0, 0, false, false, 'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Butter Chicken Rice Combo', 'Butter chicken, jeera rice, salad and a gulab jamun — a full meal.', 'Combos', 319.0, 15, false, true, 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Paneer Tikka (8 pc)', 'Char-grilled paneer, capsicum and onion marinated in tandoori spices.', 'Starters', 249.0, 25, true, false, 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Chicken Tikka Kebab', 'Juicy chicken skewers fresh off the grill with mint chutney.', 'Starters', 269.0, 0, false, true, 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Mumbai Pav Bhaji', 'Buttery bhaji with 2 soft pav, onions and lemon — Juhu beach style.', 'Street Food', 149.0, 10, true, true, 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Cheese Burst Veg Pizza', 'Loaded with mozzarella, onion, capsicum and sweet corn.', 'Pizza', 299.0, 30, true, true, 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Double Smash Burger', 'Two patties, cheddar cheese, pickles and our secret sauce.', 'Fast Food', 199.0, 0, false, false, 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Fresh Garden Bowl', 'Avocado, chickpeas, greens and crunchy veggies with lemon dressing.', 'Healthy', 179.0, 0, true, false, 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=600&q=75&fit=crop&auto=format'),
+      ('Choco Sprinkle Donuts (2 pc)', 'Soft donuts dipped in chocolate with rainbow sprinkles.', 'Desserts', 99.0, 0, true, false, 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=800&h=600&q=75&fit=crop&auto=format'),
+    ];
+    var pi = 0;
+    for (final (name, desc, cat, price, disc, veg, best, photo) in prods) {
+      batch.set(products.doc('demo-$pi'), {
         'name': name,
         'description': desc,
         'category': cat,
-        'imageUrl': '',
+        'imageUrl': photo,
         'price': price,
-        'discountPercent': 0,
+        'discountPercent': disc,
         'isVeg': veg,
         'isAvailable': true,
         'isBestseller': best,
         'vendorId': AppConfig.houseVendorId,
         'vendorName': AppConfig.houseVendorName,
         'vendorActive': true,
-        'sortOrder': i++,
+        'sortOrder': pi++,
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     }
-    batch.set(offers.doc(), {
-      'code': 'HUNGRY20',
-      'title': 'Flat 20% off on your order',
-      'description': 'Valid on orders above ₹299',
-      'discountPercent': 20,
-      'maxDiscount': 100,
-      'minOrder': 299,
+
+    // 3. Top Banners & Specials
+    batch.set(banners.doc('demo-hero-1'), {
+      'placement': 'hero',
+      'title': 'Biryani Festival — Flat 20% OFF',
+      'subtitle': 'Dum-cooked chicken & veg biryani, sealed in handi and delivered hot.',
+      'badge': 'Limited time',
+      'ctaText': 'Order biryani',
+      'category': 'Biryani',
+      'productId': '',
+      'imageUrl': 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=1600&h=900&q=75&fit=crop&auto=format',
+      'sortOrder': 1,
       'active': true,
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
+
+    batch.set(banners.doc('demo-hero-2'), {
+      'placement': 'hero',
+      'title': 'Weekend Pizza Party 🍕',
+      'subtitle': 'Cheese-burst pizzas at 30% off — this weekend only.',
+      'badge': '30% OFF',
+      'ctaText': 'Grab a slice',
+      'category': 'Pizza',
+      'productId': '',
+      'imageUrl': 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&h=900&q=75&fit=crop&auto=format',
+      'sortOrder': 2,
+      'active': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    batch.set(banners.doc('demo-bottom-1'), {
+      'placement': 'bottom',
+      'title': 'Sweet tooth? Desserts from ₹99',
+      'subtitle': 'Pastries, brownies & donuts to end every meal right.',
+      'badge': 'Freshly baked',
+      'ctaText': 'See desserts',
+      'category': 'Desserts',
+      'productId': '',
+      'imageUrl': 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=1200&h=600&q=75&fit=crop&auto=format',
+      'sortOrder': 1,
+      'active': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    // 4. Coupons
+    final offList = [
+      ('HUNGRY20', 'Flat 20% off on your order', 'Valid on orders above ₹299', 20, 100.0, 299.0),
+      ('FIRSTBITE', '50% off your first order', 'New here? Max ₹120 off on orders above ₹199', 50, 120.0, 199.0),
+      ('FEAST15', '15% off on big feasts', 'No cap — on orders above ₹599', 15, 0.0, 599.0),
+    ];
+    for (final (code, title, desc, pct, max, min) in offList) {
+      batch.set(offers.doc('demo-$code'), {
+        'code': code,
+        'title': title,
+        'description': desc,
+        'discountPercent': pct,
+        'maxDiscount': max,
+        'minOrder': min,
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    // 5. Store Settings
+    batch.set(settingsDoc, {
+      'storeOpen': true,
+      'specialsTitle': "Don't miss these",
+      'deliveryFee': 25.0,
+      'freeDeliveryAbove': 299.0,
+      'minOrder': 99.0,
+      'etaMinutes': 30,
+      'upiId': AppConfig.defaultUpiId,
+      'payeeName': AppConfig.defaultPayeeName,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
     await batch.commit();
   }
+
+  /// Seeds a starter menu so a fresh store isn't empty. Admin-only.
+  static Future<void> seedSampleMenu() async {
+    await seedFullStore();
+  }
 }
+
