@@ -1,0 +1,130 @@
+rules_version = '2';
+
+// HungryKya security rules.
+// Roles: admin  = the admin login (admin@123 → admin@123.hungrykya.app) or a document at /admins/{uid}
+//        vendor = /vendors/{uid} with status "approved"
+//        customer = everyone else who is signed in and not blocked
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function isAdmin() {
+      return signedIn() && (request.auth.token.email == 'admin@123.hungrykya.app'
+        || exists(/databases/$(database)/documents/admins/$(uid())));
+    }
+    function notBlocked() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(uid()))
+        && get(/databases/$(database)/documents/users/$(uid())).data.get('blocked', false) == false;
+    }
+    function isApprovedVendor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/vendors/$(uid()))
+        && get(/databases/$(database)/documents/vendors/$(uid())).data.status == 'approved';
+    }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /admins/{id} {
+      allow read: if signedIn() && (uid() == id || isAdmin());
+      allow write: if false;
+    }
+
+    match /users/{id} {
+      allow read: if signedIn() && (uid() == id || isAdmin());
+      allow create: if signedIn() && uid() == id
+        && request.resource.data.blocked == false
+        && request.resource.data.role in ['customer', 'vendor'];
+      // Users can edit their own profile but never un-block themselves.
+      allow update: if isAdmin()
+        || (signedIn() && uid() == id
+            && !changed().hasAny(['blocked'])
+            && request.resource.data.get('role', 'customer') in ['customer', 'vendor']);
+      allow delete: if isAdmin();
+    }
+
+    match /vendors/{id} {
+      allow read: if isAdmin() || (signedIn() && uid() == id);
+      // A vendor application must start as pending and record consent to the 2% commission.
+      allow create: if signedIn() && uid() == id
+        && request.resource.data.status == 'pending'
+        && request.resource.data.commissionRate == 0.02
+        && request.resource.data.commissionConsent.accepted == true;
+      allow update: if isAdmin()
+        || (signedIn() && uid() == id
+            && !changed().hasAny(['status', 'commissionRate', 'commissionConsent', 'approvedAt', 'rejectionReason', 'email']));
+      allow delete: if isAdmin();
+    }
+
+    match /products/{id} {
+      allow read: if true;
+      allow create: if isAdmin()
+        || (isApprovedVendor() && notBlocked() && request.resource.data.vendorId == uid());
+      allow update: if isAdmin()
+        || (isApprovedVendor() && resource.data.vendorId == uid() && request.resource.data.vendorId == uid());
+      allow delete: if isAdmin() || (isApprovedVendor() && resource.data.vendorId == uid());
+    }
+
+    // Approved vendors can add new categories for their dishes; only admin edits/deletes.
+    match /categories/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || isApprovedVendor();
+      allow update, delete: if isAdmin();
+    }
+    // Vendor settlements: written by admin, visible to the paid vendor.
+    match /payouts/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.vendorId == uid());
+      allow write: if isAdmin();
+    }
+    match /banners/{id}  { allow read: if true; allow write: if isAdmin(); }
+    match /offers/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /settings/{id} { allow read: if true; allow write: if isAdmin(); }
+
+    // Compressed photos stored as bytes (works on the free Spark plan).
+    match /media/{id} {
+      allow read: if true;
+      allow create: if (isAdmin() || isApprovedVendor())
+        && request.resource.data.data is bytes
+        && request.resource.data.data.size() < 1000000;
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{id} {
+      allow read: if isAdmin()
+        || (signedIn() && (resource.data.userId == uid() || resource.data.vendorId == uid()));
+
+      allow create: if notBlocked()
+        && request.resource.data.userId == uid()
+        && request.resource.data.status == 'placed'
+        && request.resource.data.paymentStatus == 'pending'
+        && request.resource.data.paymentMethod in ['cod', 'upi']
+        && request.resource.data.total is number && request.resource.data.total > 0
+        && (request.resource.data.vendorId == 'house' || request.resource.data.commissionRate == 0.02);
+
+      allow update: if isAdmin()
+        // The kitchen moves its own orders through the status flow.
+        || (isApprovedVendor() && resource.data.vendorId == uid()
+            && changed().hasOnly(['status', 'statusHistory', 'updatedAt', 'paymentStatus'])
+            && (request.resource.data.paymentStatus == resource.data.paymentStatus
+                || (resource.data.paymentMethod == 'cod'
+                    && request.resource.data.paymentStatus == 'paid'
+                    && request.resource.data.status == 'delivered')))
+        // The customer can cancel before acceptance, submit a UPI reference, or switch to COD.
+        || (signedIn() && resource.data.userId == uid() && (
+              (resource.data.status == 'placed'
+                && request.resource.data.status == 'cancelled'
+                && changed().hasOnly(['status', 'statusHistory', 'updatedAt']))
+           || (resource.data.paymentMethod == 'upi'
+                && resource.data.paymentStatus in ['pending', 'failed']
+                && request.resource.data.paymentStatus == 'verification'
+                && changed().hasOnly(['paymentStatus', 'upiRef', 'updatedAt']))
+           || (resource.data.paymentStatus in ['pending', 'failed']
+                && request.resource.data.paymentMethod == 'cod'
+                && request.resource.data.paymentStatus == 'pending'
+                && changed().hasOnly(['paymentMethod', 'paymentStatus', 'updatedAt']))
+        ));
+
+      allow delete: if false;
+    }
+  }
+}
