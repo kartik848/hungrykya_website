@@ -22,6 +22,13 @@ class AuthService extends ChangeNotifier {
   StreamSubscription? _authSub, _profileSub, _vendorSub;
 
   AuthService() {
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      await _auth.setPersistence(Persistence.LOCAL);
+    } catch (_) {}
     _authSub = _auth.authStateChanges().listen(_onUser);
   }
 
@@ -35,8 +42,6 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> _onUser(User? u) async {
-    // Update synchronously first: screens shown right after sign-up must
-    // already see the new user, before any await below.
     final old = [_profileSub, _vendorSub];
     _profileSub = null;
     _vendorSub = null;
@@ -44,10 +49,11 @@ class AuthService extends ChangeNotifier {
     profile = null;
     vendor = null;
     isAdmin = u?.email == AppConfig.adminEmail;
-    notifyListeners();
+
     for (final s in old) {
       await s?.cancel();
     }
+
     if (u != null) {
       isAdmin = u.email == AppConfig.adminEmail;
       if (!isAdmin) {
@@ -57,6 +63,23 @@ class AuthService extends ChangeNotifier {
           isAdmin = false;
         }
       }
+
+      // Pre-fetch initial profile and vendor docs before marking ready = true
+      // so screens immediately see the loaded vendor/profile without flickering.
+      try {
+        final pSnap = await _fs.collection('users').doc(u.uid).get();
+        if (pSnap.exists && pSnap.data() != null) {
+          profile = AppUser.fromMap(pSnap.id, pSnap.data()!);
+        }
+      } catch (_) {}
+
+      try {
+        final vSnap = await _fs.collection('vendors').doc(u.uid).get();
+        if (vSnap.exists && vSnap.data() != null) {
+          vendor = Vendor.fromMap(vSnap.id, vSnap.data()!);
+        }
+      } catch (_) {}
+
       _profileSub = _fs.collection('users').doc(u.uid).snapshots().listen((d) {
         profile = d.exists ? AppUser.fromMap(d.id, d.data()!) : null;
         notifyListeners();
@@ -66,6 +89,7 @@ class AuthService extends ChangeNotifier {
         notifyListeners();
       }, onError: (_) {});
     }
+
     ready = true;
     notifyListeners();
   }
@@ -96,17 +120,26 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> signIn(String email, String password) async {
+    try {
+      await _auth.setPersistence(Persistence.LOCAL);
+    } catch (_) {}
     final c = await _auth.signInWithEmailAndPassword(email: AppConfig.normalizeLoginId(email), password: password);
     await _ensureProfile(c.user!);
   }
 
   Future<void> signUp({required String name, required String email, required String phone, required String password}) async {
+    try {
+      await _auth.setPersistence(Persistence.LOCAL);
+    } catch (_) {}
     final c = await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
     await c.user!.updateDisplayName(name.trim());
     await _ensureProfile(c.user!, name: name.trim(), phone: phone.trim());
   }
 
   Future<void> signInWithGoogle() async {
+    try {
+      await _auth.setPersistence(Persistence.LOCAL);
+    } catch (_) {}
     final c = await _auth.signInWithPopup(GoogleAuthProvider());
     await _ensureProfile(c.user!);
   }

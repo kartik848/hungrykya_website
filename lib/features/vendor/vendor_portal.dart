@@ -30,7 +30,24 @@ class VendorPortal extends StatelessWidget {
           return PanelLogin(
             title: 'Vendor dashboard',
             subtitle: 'Log in to manage your kitchen, menu and orders.',
-            footer: Center(child: TextButton(onPressed: () => context.go('/partner'), child: const Text('New kitchen? Register as vendor'))),
+            footer: Column(children: [
+              TextButton(onPressed: () => context.go('/admin'), child: const Text('Admin Console Login →')),
+            ]),
+          );
+        }
+        if (auth.isAdmin && auth.vendor == null) {
+          return PanelMessage(
+            emoji: '👑',
+            title: 'Logged in as Admin',
+            body: 'You are currently logged in with your Admin Account (${auth.user?.email}).',
+            actions: [
+              ElevatedButton.icon(
+                onPressed: () => context.go('/admin'),
+                icon: const Icon(Icons.dashboard_rounded, size: 18),
+                label: const Text('Open Admin Console'),
+              ),
+              TextButton(onPressed: auth.signOut, child: const Text('Log out')),
+            ],
           );
         }
         final v = auth.vendor;

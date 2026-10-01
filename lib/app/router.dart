@@ -16,13 +16,7 @@ import '../features/vendor/vendor_portal.dart';
 import 'theme.dart';
 
 final appRouter = GoRouter(
-  redirect: (c, s) {
-    if (areaFor(s.uri.path) != Fb.area) {
-      // Full page load so the target area starts with its own login session.
-      web.window.location.assign(s.uri.toString());
-    }
-    return null;
-  },
+  initialLocation: '/',
   routes: [
     GoRoute(path: '/', builder: (c, s) => HomePage(section: s.uri.queryParameters['s'])),
     GoRoute(path: '/login', builder: (c, s) => CustomerAuthPage(next: s.uri.queryParameters['next'])),

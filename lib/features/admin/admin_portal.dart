@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app/theme.dart';
@@ -31,14 +32,29 @@ class AdminPortal extends StatelessWidget {
         final auth = context.watch<AuthService>();
         if (!auth.ready) return const Scaffold(backgroundColor: PK.bg, body: Center(child: CircularProgressIndicator()));
         if (!auth.signedIn) {
-          return const PanelLogin(
+          return PanelLogin(
             title: 'Admin console',
             subtitle: 'Log in with your HungryKya admin ID and password.',
             emailLabel: 'Admin ID or email',
             showGoogle: false,
+            footer: Center(
+              child: TextButton.icon(
+                onPressed: () => context.go('/vendor'),
+                icon: const Icon(Icons.storefront_rounded, size: 16),
+                label: const Text('Kitchen / Vendor Portal Login →'),
+              ),
+            ),
           );
         }
-        if (!auth.isAdmin) return _NotAdmin(uid: auth.user!.uid, email: auth.user!.email ?? '');
+        if (!auth.isAdmin) {
+          if (auth.vendor != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) context.go('/vendor');
+            });
+            return const Scaffold(backgroundColor: PK.bg, body: Center(child: CircularProgressIndicator()));
+          }
+          return _NotAdmin(uid: auth.user!.uid, email: auth.user!.email ?? '');
+        }
         return const _AdminHome();
       }),
     );
@@ -60,6 +76,13 @@ class _NotAdmin extends StatelessWidget {
           'To access the Admin Console, please log in with your Admin ID (admin@123), '
           'or authorize this UID in Firebase Console under the "admins" collection:\n\n$uid',
       actions: [
+        if (auth.vendor != null)
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: PK.violet, foregroundColor: Colors.white),
+            onPressed: () => context.go('/vendor'),
+            icon: const Icon(Icons.storefront_rounded, size: 18),
+            label: const Text('Go to Vendor Dashboard'),
+          ),
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(backgroundColor: PK.amber, foregroundColor: Colors.black),
           onPressed: auth.signOut,
