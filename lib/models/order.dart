@@ -204,7 +204,9 @@ class OrderModel {
   bool get awaitingPayout => isVendorOrder && status == OrderStatus.delivered && !isSettled;
 
   bool get hasLocation => lat != null && lng != null;
-  String get mapsUrl => 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+  String get mapsUrl => hasLocation
+      ? 'https://www.google.com/maps/search/?api=1&query=$lat,$lng'
+      : 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent([address, landmark, pincode].where((s) => s.isNotEmpty).join(', '))}';
 
   bool get isVendorOrder => vendorId != AppConfig.houseVendorId;
   bool get isUpi => paymentMethod == 'upi';

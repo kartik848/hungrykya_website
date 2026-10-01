@@ -162,7 +162,11 @@ void showPrintReceiptDialog(BuildContext context, OrderModel o) {
   );
 }
 
-Future<void> advanceOrder(BuildContext context, OrderModel o, String status) async {
+Future<void> advanceOrder(BuildContext context, OrderModel o, String status, {bool isAdmin = false}) async {
+  if (isAdmin && o.isVendorOrder && status != OrderStatus.cancelled) {
+    showToast(context, 'Vendor orders can only be accepted and updated by the vendor.', error: true);
+    return;
+  }
   try {
     await Db.setOrderStatus(o, status);
     if (context.mounted) showToast(context, 'Order #${o.orderNo} → ${OrderStatus.label(status)}');
@@ -270,6 +274,23 @@ class _OrderRow extends StatelessWidget {
         if (isNew) const Pill('NEW', color: PK.flame, solid: true),
         Pill(OrderStatus.label(o.status), color: OrderStatus.color(o.status)),
         Pill('${o.isUpi ? 'UPI' : 'COD'} · ${PayStatus.label(o.paymentStatus)}', color: PayStatus.color(o.paymentStatus)),
+        InkWell(
+          onTap: () => launchUrl(Uri.parse(o.mapsUrl), mode: LaunchMode.externalApplication),
+          borderRadius: BorderRadius.circular(99),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: PK.blue.withOpacity(.08),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: PK.blue.withOpacity(.3)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.location_on_rounded, size: 13, color: PK.blue),
+              const SizedBox(width: 4),
+              Text(o.hasLocation ? 'GPS Location' : 'Maps Link', style: AppTheme.body(11.5, color: PK.blue, weight: FontWeight.w700)),
+            ]),
+          ),
+        ),
       ]),
       const SizedBox(height: 6),
       Text(
@@ -293,7 +314,7 @@ class _OrderRow extends StatelessWidget {
       if (next != null)
         ElevatedButton(
           style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-          onPressed: () => advanceOrder(context, o, next),
+          onPressed: () => advanceOrder(context, o, next, isAdmin: isAdmin),
           child: Text(nextActionLabel(o.status)),
         )
       else if (!kitchenControls && o.isActive)
@@ -409,50 +430,179 @@ class _OrderDetail extends StatelessWidget {
             section(
               'Customer',
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(o.customerName, style: AppTheme.body(15.5, color: PK.ink, weight: FontWeight.w700)),
+                Text(o.customerName, style: AppTheme.body(16, color: PK.ink, weight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 Wrap(spacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                  Text('+91 ${o.phone}', style: AppTheme.body(14, color: PK.ink)),
+                  Text('+91 ${o.phone}', style: AppTheme.body(14, color: PK.ink, weight: FontWeight.w600)),
                   IconButton(
-                    tooltip: 'Call',
+                    tooltip: 'Call customer',
                     visualDensity: VisualDensity.compact,
                     onPressed: () => launchUrl(Uri.parse('tel:+91${o.phone}')),
                     icon: const Icon(Icons.call_rounded, size: 18, color: PK.green),
                   ),
                   IconButton(
-                    tooltip: 'WhatsApp',
+                    tooltip: 'WhatsApp customer',
                     visualDensity: VisualDensity.compact,
                     onPressed: () => launchUrl(Uri.parse('https://wa.me/91${o.phone}'), mode: LaunchMode.externalApplication),
                     icon: const Icon(Icons.chat_rounded, size: 18, color: PK.green),
                   ),
                   IconButton(
-                    tooltip: 'Copy',
+                    tooltip: 'Copy phone number',
                     visualDensity: VisualDensity.compact,
-                    onPressed: () => Clipboard.setData(ClipboardData(text: o.phone)),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: o.phone));
+                      showToast(context, 'Phone number copied');
+                    },
                     icon: const Icon(Icons.copy_rounded, size: 16, color: PK.muted),
                   ),
                 ]),
                 if (o.email.isNotEmpty) Text(o.email, style: AppTheme.body(13.5, color: PK.muted)),
-                const SizedBox(height: 6),
-                Text([o.address, o.landmark, o.pincode].where((e) => e.isNotEmpty).join(', '),
-                    style: AppTheme.body(14, color: PK.ink, height: 1.5)),
-                if (o.hasLocation)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: OutlinedButton.icon(
-                      onPressed: () => launchUrl(Uri.parse(o.mapsUrl), mode: LaunchMode.externalApplication),
-                      icon: const Icon(Icons.map_rounded, size: 18, color: PK.blue),
-                      label: const Text('Open location in Google Maps'),
-                    ),
-                  ),
-                if (o.note.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 10),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: PK.amber.withOpacity(.12), borderRadius: BorderRadius.circular(10)),
-                    child: Text('Note: ${o.note}', style: AppTheme.body(13.5, color: PK.ink, weight: FontWeight.w600)),
-                  ),
               ]),
+            ),
+            section(
+              'Delivery Location & Google Maps Link',
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: PK.blue.withOpacity(.04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: PK.blue.withOpacity(.25)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: PK.blue.withOpacity(.12), borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.location_on_rounded, color: PK.blue, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Text('Delivery Address', style: AppTheme.body(14, color: PK.ink, weight: FontWeight.w800)),
+                          const SizedBox(width: 8),
+                          if (o.hasLocation)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: PK.green.withOpacity(.12), borderRadius: BorderRadius.circular(6)),
+                              child: Text('📍 GPS Verified', style: AppTheme.body(11, color: PK.green, weight: FontWeight.w700)),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: PK.amber.withOpacity(.15), borderRadius: BorderRadius.circular(6)),
+                              child: Text('🔍 Address Search', style: AppTheme.body(11, color: HK.amberDeep, weight: FontWeight.w700)),
+                            ),
+                        ]),
+                        const SizedBox(height: 4),
+                        SelectableText(
+                          [o.address, o.landmark, o.pincode].where((e) => e.isNotEmpty).join(', '),
+                          style: AppTheme.body(14, color: PK.ink, height: 1.45),
+                        ),
+                        if (o.hasLocation)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: SelectableText(
+                              'Coordinates: ${o.lat!.toStringAsFixed(6)}, ${o.lng!.toStringAsFixed(6)}',
+                              style: AppTheme.body(12, color: PK.muted, weight: FontWeight.w600),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: PK.line),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.link_rounded, size: 18, color: PK.blue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => launchUrl(Uri.parse(o.mapsUrl), mode: LaunchMode.externalApplication),
+                          child: Text(
+                            o.mapsUrl,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTheme.body(12.5, color: PK.blue, weight: FontWeight.w700).copyWith(
+                              decoration: TextDecoration.underline,
+                              decorationColor: PK.blue,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton(
+                        tooltip: 'Copy link',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.copy_rounded, size: 17, color: PK.muted),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: o.mapsUrl));
+                          showToast(context, 'Google Maps link copied!');
+                        },
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: PK.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      ),
+                      onPressed: () => launchUrl(Uri.parse(o.mapsUrl), mode: LaunchMode.externalApplication),
+                      icon: const Icon(Icons.directions_rounded, size: 18),
+                      label: const Text('Open in Google Maps'),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: o.mapsUrl));
+                        showToast(context, 'Google Maps link copied to clipboard!');
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('Copy Maps Link'),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        foregroundColor: PK.green,
+                        side: BorderSide(color: PK.green.withOpacity(.5)),
+                      ),
+                      onPressed: () {
+                        final shareMsg = 'HungryKya Order #${o.orderNo}\n'
+                            'Customer: ${o.customerName} (+91${o.phone})\n'
+                            'Address: ${[o.address, o.landmark, o.pincode].where((e) => e.isNotEmpty).join(', ')}\n'
+                            'Google Maps Location:\n${o.mapsUrl}';
+                        launchUrl(Uri.parse('https://wa.me/?text=${Uri.encodeComponent(shareMsg)}'),
+                            mode: LaunchMode.externalApplication);
+                      },
+                      icon: const Icon(Icons.share_rounded, size: 16, color: PK.green),
+                      label: const Text('Share with Rider (WhatsApp)'),
+                    ),
+                  ]),
+                  if (o.note.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: PK.amber.withOpacity(.12), borderRadius: BorderRadius.circular(10)),
+                      child: Row(children: [
+                        const Icon(Icons.sticky_note_2_rounded, size: 16, color: HK.amberDeep),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Customer note: ${o.note}',
+                              style: AppTheme.body(13, color: PK.ink, weight: FontWeight.w600)),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ]),
+              ),
             ),
             section(
               'Items',
@@ -558,7 +708,7 @@ class _OrderDetail extends StatelessWidget {
               style: OutlinedButton.styleFrom(foregroundColor: PK.red),
               onPressed: () async {
                 if (await confirmDialog(context, title: 'Cancel order #${o.orderNo}?', message: 'The customer will see this order as cancelled.', confirm: 'Cancel order', destructive: true)) {
-                  if (context.mounted) await advanceOrder(context, o, OrderStatus.cancelled);
+                  if (context.mounted) await advanceOrder(context, o, OrderStatus.cancelled, isAdmin: isAdmin);
                 }
               },
               icon: const Icon(Icons.cancel_outlined, size: 18),
@@ -566,7 +716,7 @@ class _OrderDetail extends StatelessWidget {
             ),
             if (next != null)
               ElevatedButton.icon(
-                onPressed: () => advanceOrder(context, o, next),
+                onPressed: () => advanceOrder(context, o, next, isAdmin: isAdmin),
                 icon: Icon(OrderStatus.icon(next), size: 18),
                 label: Text(nextActionLabel(o.status)),
               ),

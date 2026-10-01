@@ -42,7 +42,23 @@ class PanelShell extends StatelessWidget {
         titleSpacing: 0,
         title: Text(items[selected].label, style: AppTheme.body(17, color: Colors.white, weight: FontWeight.w700)),
         actions: [
-          Padding(padding: const EdgeInsets.only(right: 14), child: Pill(roleLabel, color: PK.amber)),
+          Padding(padding: const EdgeInsets.only(right: 6), child: Pill(roleLabel, color: PK.amber)),
+          IconButton(
+            tooltip: 'Log out',
+            icon: const Icon(Icons.logout_rounded, size: 20, color: Colors.white70),
+            onPressed: () async {
+              final ok = await confirmDialog(
+                context,
+                title: 'Log out?',
+                message: 'Are you sure you want to log out of the panel?',
+                confirm: 'Log out',
+              );
+              if (ok && context.mounted) {
+                context.read<AuthService>().signOut();
+              }
+            },
+          ),
+          const SizedBox(width: 4),
         ],
       ),
       drawer: Drawer(
@@ -110,7 +126,17 @@ class _Sidebar extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Log out',
-                onPressed: () => auth.signOut(),
+                onPressed: () async {
+                  final ok = await confirmDialog(
+                    context,
+                    title: 'Log out?',
+                    message: 'Are you sure you want to log out of the panel?',
+                    confirm: 'Log out',
+                  );
+                  if (ok && context.mounted) {
+                    auth.signOut();
+                  }
+                },
                 icon: const Icon(Icons.logout_rounded, color: Colors.white70, size: 20),
               ),
             ]),

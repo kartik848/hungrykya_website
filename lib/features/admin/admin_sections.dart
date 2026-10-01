@@ -333,9 +333,12 @@ class AdminDashboard extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                             ),
-                            onPressed: () => advanceOrder(context, o, OrderStatus.confirmed),
+                            onPressed: () => advanceOrder(context, o, OrderStatus.confirmed, isAdmin: true),
                             child: const Text('Accept'),
                           ),
+                        ] else if (o.status == OrderStatus.placed && o.isVendorOrder) ...[
+                          const SizedBox(width: 12),
+                          const Pill('Vendor handles', color: PK.violet, icon: Icons.storefront_rounded),
                         ],
                       ],
                     ),
